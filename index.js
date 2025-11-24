@@ -149,12 +149,19 @@ client.on('messageCreate', message => {
     }
     else if (msg === '!제더') {
         message.channel.send('전 L입니다');
-    }
+    } 
     else if (msg === '!good night') {
         message.channel.send('모두들 쫀밤!');
     }
     else if (msg === '!아벨') {
-        message.channel.send('하이린만 괴롭히는 당사자.');
+        // 🚨 멘션하고 싶은 사용자의 실제 ID로 변경하세요.
+        const TARGET_USER_ID = '13312185983913165011';
+
+        // 디스코드의 멘션 형식 문자열을 직접 생성합니다.
+        const targetMention = `<@${TARGET_USER_ID}>`;
+
+        // 최종 응답 메시지 구성
+        const response = `${targetMention} 바부 멍충이`;
     }
     else if (msg === '!카나') {
         message.channel.send('누나바라기');
@@ -173,7 +180,15 @@ client.on('messageCreate', message => {
     }
 
     else if (msg === '!루나') {
-        message.channel.send('바보');
+        const TARGET_USER_ID = '1225777165728219268';
+
+        // 디스코드의 멘션 형식 문자열을 직접 생성합니다.
+        const targetMention = `<@${TARGET_USER_ID}>`;
+
+        // 최종 응답 메시지 구성
+        const response = `${targetMention} 바부 멍충이`;
+
+        message.channel.send(response);
     }
     else if (msg === '!하루') {
         message.channel.send('하루룽 목소리 개조음!');
