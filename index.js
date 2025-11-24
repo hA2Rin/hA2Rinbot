@@ -93,17 +93,7 @@ client.on('messageCreate', message => {
 
     // 명령어 처리
     if (msg === '!이우밍') {
-        // 🚨 멘션하고 싶은 사용자의 실제 ID로 변경하세요.
-        const TARGET_USER_ID = '533286629876432896';
-
-        // 디스코드의 멘션 형식 문자열을 직접 생성합니다.
-        const targetMention = `<@${TARGET_USER_ID}>`;
-
-        // 최종 응답 메시지 구성
-        const response = `${targetMention} 에겐녀`;
-
-        message.channel.send(response);
-    
+        message.channel.send('에겐녀');
 
     } else if (msg === '!우연이') {
         message.channel.send('바부!');
