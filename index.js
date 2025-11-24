@@ -138,7 +138,7 @@ client.on('messageCreate', message => {
         message.channel.send('포테토칩');
     }
     else if (msg === '!제더') {
-        message.channel.send('전 L입니다');
+        message.channel.send('L입니다');
     } 
     else if (msg === '!good night') {
         message.channel.send('모두들 쫀밤!');
