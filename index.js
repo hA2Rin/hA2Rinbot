@@ -105,7 +105,16 @@ client.on('messageCreate', message => {
         message.channel.send('아침!');
     }
     else if (msg === '!추') {
-        message.channel.send('병신샛기!');
+        // 🚨 멘션하고 싶은 사용자의 실제 ID로 변경하세요.
+        const TARGET_USER_ID = '1372920618898686072';
+
+        // 디스코드의 멘션 형식 문자열을 직접 생성합니다.
+        const targetMention = `<@${TARGET_USER_ID}>`;
+
+        // 최종 응답 메시지 구성
+        const response = `${targetMention} 병신샛기!`;
+
+        message.channel.send(response);
     }
     else if (msg === '!굿나잇') {
         message.channel.send('다들 잘자요!');
