@@ -126,7 +126,7 @@ client.on('messageCreate', message => {
         message.channel.send('Monster Rap');
     }
     else if (msg === '!하이린') {
-        message.channel.send('점점 삶의 희망이 없어지는중');
+        message.channel.send('행복함 ㅎㅅㅎ');
     }
     else if (msg === '!유지') {
         message.channel.send('바부 멍충이');
