@@ -21,8 +21,9 @@ const {
 const play = require('play-dl'); // ✅ play-dl 사용
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-const GUILD_ID = process.env.DISCORD_GUILD_ID;
+// 🚨 수정: Railway 변수 Key에 맞게 변경 (DISCORD_ 접두사 제거)
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
 // 봇 클라이언트 생성 및 필요한 인텐트 설정
 const client = new Client({
@@ -61,6 +62,19 @@ async function playNext(guild, song) {
     }
 
     try {
+        // 🚨 수정된 로직: URL이 유효한지 먼저 검사하여 'Invalid URL' 오류 방지
+        if (!song.url || !song.title) {
+            const errorMessage = `🚨 **${song.title || '알 수 없는 곡'}**의 URL 또는 제목 정보가 누락되어 재생할 수 없습니다. 다음 곡으로 건너뜁니다.`;
+            console.error(`[ERROR] URL 누락 오류: ${errorMessage}`);
+
+            queue.songs.shift(); // 현재 곡 제거
+            playNext(guild, queue.songs[0]);
+            if (queue.textChannel) {
+                queue.textChannel.send(errorMessage);
+            }
+            return;
+        }
+
         // play-dl.stream을 사용하여 AudioResource를 생성합니다. (YTDL 대신 사용)
         const stream = await play.stream(song.url);
 
@@ -368,6 +382,12 @@ client.on('interactionCreate', async interaction => {
             url: url,
         };
 
+        // 🚨 추가된 로직: URL이 유효한지 최종 확인 후 대기열에 추가
+        if (!song.url || !song.title) {
+            console.error(`[ERROR] URL 또는 제목 누락: Title=${song.title}, URL=${song.url}`);
+            return await interaction.editReply('❌ 노래 정보를 가져오는 데 실패했습니다. 다른 검색어로 시도해 주세요.');
+        }
+
         if (!queue) {
             // 큐가 없으면 새로 생성하고 음성 채널에 연결
             const queueContruct = {
@@ -411,7 +431,9 @@ client.on('interactionCreate', async interaction => {
 
                 // 첫 곡 재생 시작
                 playNext(guild, queueContruct.songs[0]);
-                await interaction.editReply(`🎶 **${song.title}** 재생 시작!`);
+                // interaction.editReply는 playNext에서 처리될 수도 있으므로 주석 처리하거나, playNext 내의 send와 중복되지 않도록 주의
+                // 🚨 수정: playNext가 재생 시작 메시지를 보내므로, 여기서는 큐 시작 알림으로 변경
+                await interaction.editReply(`🎶 **${song.title}** (으)로 재생을 시작합니다.`);
 
             } catch (err) {
                 console.error('음성 연결 오류:', err);
