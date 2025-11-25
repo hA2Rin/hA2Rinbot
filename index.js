@@ -17,7 +17,8 @@ const {
     VoiceConnectionStatus
 } = require('@discordjs/voice');
 const ytdl = require('ytdl-core'); // YouTube 오디오 스트림 추출
-const ytsr = require('ytsr'); // YouTube 검색 라이브러리 추가 (npm install ytsr 필요)
+// const ytsr = require('ytsr'); // ❌ ytsr 대신 play-dl 사용
+const play = require('play-dl'); // ✅ play-dl 추가
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
@@ -60,14 +61,14 @@ async function playNext(guild, song) {
     }
 
     try {
-        // YouTube 오디오 스트림 생성
-        const stream = ytdl(song.url, {
-            filter: 'audioonly',
-            quality: 'lowestaudio',
-            highWaterMark: 1 << 25
+        // ytdl 대신 play-dl을 사용하여 스트림 소스 생성 (ytdl-core는 종종 스트림 오류를 발생시킵니다.)
+        // play-dl.stream을 사용하여 AudioResource를 생성합니다.
+        const stream = await play.stream(song.url);
+
+        const resource = createAudioResource(stream.stream, {
+            inputType: stream.type
         });
 
-        const resource = createAudioResource(stream);
         queue.player.play(resource);
 
         queue.textChannel.send(`🎶 **${song.title}** 재생 시작!`);
@@ -334,26 +335,28 @@ client.on('interactionCreate', async interaction => {
         let title;
 
         try {
-            if (ytdl.validateURL(input)) {
-                // 입력이 유효한 URL인 경우
+            // play-dl을 사용하여 유효성 검사 및 검색 실행
+            const type = play.validate(input); // 유효성 검사
+
+            if (type === 'yt_video' || type === 'yt_playlist') {
+                // 입력이 유효한 YouTube URL인 경우 (비디오 또는 플레이리스트)
                 url = input;
             } else {
                 // 입력이 검색어인 경우
-                const filters = await ytsr.getFilters(input);
-                const filter = filters.get('Type').get('Video');
-                const searchResults = await ytsr(filter.url, { limit: 1 });
+                const searchResults = await play.search(input, { limit: 1 }); // play-dl 검색 사용
 
-                if (!searchResults.items || searchResults.items.length === 0) {
+                if (!searchResults || searchResults.length === 0) {
                     return await interaction.editReply('❌ 검색 결과가 없습니다.');
                 }
-                url = searchResults.items[0].url;
+                url = searchResults[0].url; // 첫 번째 검색 결과의 URL 사용
             }
 
+            // 노래 정보 가져오기 (play-dl 대신 ytdl.getInfo를 사용해도 무방)
             const songInfo = await ytdl.getInfo(url);
             title = songInfo.videoDetails.title;
 
         } catch (e) {
-            console.error('검색/URL 처리 오류:', e);
+            console.error('검색/URL 처리 오류 (play-dl 사용):', e);
             return await interaction.editReply('❌ 검색 또는 URL 처리 중 오류가 발생했습니다. 유효한 YouTube URL이나 검색어를 입력해주세요.');
         }
 
