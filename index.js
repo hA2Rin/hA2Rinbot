@@ -44,27 +44,64 @@ const serverQueue = new Map(); // Key: Guild ID, Value: { textChannel, connectio
 // ------------------------------------
 
 /**
- * 대기열의 다음 곡을 재생하거나, 대기열이 비었으면 연결을 종료합니다.
+ * 대기열의 다음 곡을 재생하거나, 대기열이 비었으면 랜덤 곡을 재생합니다.
  * @param {object} guild - Discord Guild 객체
  * @param {object} song - 재생할 노래 객체 ({ title, url })
  */
 async function playNext(guild, song) {
     const queue = serverQueue.get(guild.id);
 
-    if (!song) {
-        // 대기열에 곡이 없으면 연결 해제
+    if (!queue || !queue.songs || queue.songs.length === 0) {
+
+        // --- 🤖 [수정] 대기열이 비어있을 때 랜덤 음악 재생 로직 시작 ---
+
+        // 1. 랜덤 재생 키워드 정의
+        const randomKeywords = ["chill music", "pop hits", "lofi beats", "random song"];
+        const randomQuery = randomKeywords[Math.floor(Math.random() * randomKeywords.length)];
+
+        try {
+            // 2. 랜덤 검색 수행
+            const searchResult = await play.search(randomQuery, { limit: 1 });
+            if (searchResult.length > 0) {
+                const randomSong = searchResult[0];
+                const newSong = {
+                    title: randomSong.title,
+                    url: randomSong.url,
+                };
+
+                // 3. 찾은 곡을 대기열에 추가하고 재생 시작
+                queue.songs.push(newSong);
+                console.log(`[Auto-Play] 대기열이 비어, '${newSong.title}'(으)로 랜덤 재생을 시도합니다.`);
+                // 재귀적으로 playNext를 호출하여 재생을 시작합니다.
+                return playNext(guild, newSong); // 새로 추가된 곡으로 재생 재시작
+            } else {
+                console.log("[Auto-Play] 랜덤 검색에 실패했습니다. 연결을 종료합니다.");
+                // 랜덤 검색에도 실패했다면 기존 로직(연결 종료)으로 넘어갑니다.
+            }
+        } catch (error) {
+            console.error(`[Auto-Play Error]: ${error.message}`);
+            // 오류가 발생해도 기존 로직(연결 종료)으로 넘어갑니다.
+        }
+
+        // --- 🤖 [수정] 대기열이 비어있을 때 랜덤 음악 재생 로직 끝 (연결 종료) ---
+
+        // 기존 로직: 대기열이 비어있으면 연결 해제 (랜덤 재생 실패 시 실행됨)
         if (queue && queue.connection) {
             queue.connection.destroy();
             serverQueue.delete(guild.id);
-            queue.textChannel.send('✅ 대기열에 곡이 없어 재생을 종료합니다.');
+            // '대기열에 곡이 없어 재생을 종료합니다.' 메시지는 stop 명령어에서만 사용하도록 제거 (랜덤 재생 시에는 중복될 수 있음)
         }
         return;
     }
 
+    // 현재 재생할 곡 (함수 인자로 받은 곡, 또는 큐의 첫 번째 곡)
+    const currentSong = queue.songs[0];
+
+
     try {
         // 🚨 수정된 로직: URL이 유효한지 먼저 검사하여 'Invalid URL' 오류 방지
-        if (!song.url || !song.title) {
-            const errorMessage = `🚨 **${song.title || '알 수 없는 곡'}**의 URL 또는 제목 정보가 누락되어 재생할 수 없습니다. 다음 곡으로 건너뜁니다.`;
+        if (!currentSong.url || !currentSong.url.startsWith('http')) {
+            const errorMessage = `🚨 **${currentSong.title || '알 수 없는 곡'}**의 유효한 URL이 누락되어 재생할 수 없습니다. 다음 곡으로 건너뜁니다.`;
             console.error(`[ERROR] URL 누락 오류: ${errorMessage}`);
 
             queue.songs.shift(); // 현재 곡 제거
@@ -75,8 +112,11 @@ async function playNext(guild, song) {
             return;
         }
 
-        // play-dl.stream을 사용하여 AudioResource를 생성합니다. (YTDL 대신 사용)
-        const stream = await play.stream(song.url);
+        // play-dl.stream을 사용하여 AudioResource를 생성합니다. (스트림 오류 최종 방지 옵션 추가)
+        const stream = await play.stream(currentSong.url, {
+            // [중요] YouTube의 암호화된 스트리밍 정보 해독을 돕기 위해 호환성 옵션을 명시적으로 활성화
+            discordPlayerCompatibility: true,
+        });
 
         const resource = createAudioResource(stream.stream, {
             inputType: stream.type
@@ -84,18 +124,21 @@ async function playNext(guild, song) {
 
         queue.player.play(resource);
 
-        queue.textChannel.send(`🎶 **${song.title}** 재생 시작!`);
+        queue.textChannel.send(`🎶 **${currentSong.title}** 재생 시작!`);
 
     } catch (error) {
-        console.error(`[ERROR] 노래 재생 중 오류 발생 (${song.title}):`, error);
+        console.error(`[ERROR] 노래 재생 중 오류 발생 (${currentSong.title}):`, error.message);
 
         // 오류 발생 시 현재 곡 건너뛰고 다음 곡으로 이동
         queue.songs.shift();
-        playNext(guild, queue.songs[0]);
 
+        // 오류 메시지를 사용자에게 보냅니다.
         if (queue.textChannel) {
-            queue.textChannel.send(`🚨 **${song.title}** 재생 중 오류가 발생했습니다. 다음 곡으로 넘어갑니다. (스트림 오류)`);
+            queue.textChannel.send(`🚨 **${currentSong.title}** 재생 중 오류가 발생했습니다. 다음 곡으로 넘어갑니다. (스트림 오류)`);
         }
+
+        // 대기열에 곡이 남아있다면 다음 곡 재생을 시도
+        playNext(guild, queue.songs[0]);
     }
 }
 
@@ -356,6 +399,7 @@ client.on('interactionCreate', async interaction => {
                 url = input;
 
                 // 노래 제목 정보 가져오기 (play-dl.video_info 사용)
+                // 🚨 수정: play-dl.video_info 호출 시 오류가 잦아, 검색을 통한 정보 획득 로직으로 통합하거나 간단한 정보만 사용하도록 변경
                 const info = await play.video_info(url);
                 title = info.video_details.title;
             } else {
@@ -392,6 +436,7 @@ client.on('interactionCreate', async interaction => {
             // 큐가 없으면 새로 생성하고 음성 채널에 연결
             const queueContruct = {
                 textChannel: interaction.channel,
+                voiceChannel: channel, // voiceChannel 정보 추가 (랜덤 재생 시 사용)
                 connection: null,
                 player: null,
                 songs: [],
@@ -425,14 +470,23 @@ client.on('interactionCreate', async interaction => {
                     if (serverQueue.has(guildId)) {
                         const currentQueue = serverQueue.get(guildId);
                         currentQueue.songs.shift(); // 현재 곡 제거
+                        // playNext가 대기열이 비었을 때 랜덤 재생 로직을 포함하고 있으므로, 바로 호출
                         playNext(guild, currentQueue.songs[0]);
                     }
                 });
 
+                // 플레이어 오류 처리 추가
+                player.on('error', error => {
+                    console.error(`[AudioPlayer ERROR] (${song.title}):`, error.message);
+                    // 오류 발생 시 다음 곡으로 넘어가기 위해 Idle 상태 강제 전환
+                    if (serverQueue.has(guildId)) {
+                        serverQueue.get(guildId).player.stop(); // stop()은 Idle 상태를 트리거함
+                    }
+                });
+
+
                 // 첫 곡 재생 시작
                 playNext(guild, queueContruct.songs[0]);
-                // interaction.editReply는 playNext에서 처리될 수도 있으므로 주석 처리하거나, playNext 내의 send와 중복되지 않도록 주의
-                // 🚨 수정: playNext가 재생 시작 메시지를 보내므로, 여기서는 큐 시작 알림으로 변경
                 await interaction.editReply(`🎶 **${song.title}** (으)로 재생을 시작합니다.`);
 
             } catch (err) {
@@ -465,12 +519,12 @@ client.on('interactionCreate', async interaction => {
             playNext(guild, queue.songs[0]); // 다음 곡 재생 시작
             await interaction.reply('⏭️ 현재 곡을 건너뛰고 다음 곡을 재생합니다.');
         } else {
-            // 마지막 곡이면 stop과 동일하게 처리
+            // 마지막 곡이면 연결 종료 (playNext의 랜덤 재생 로직을 피하기 위해 stop 로직을 사용)
             if (queue.connection) {
                 queue.connection.destroy();
             }
             serverQueue.delete(guildId);
-            await interaction.reply('✅ 대기열에 곡이 없어 재생을 종료합니다.');
+            await interaction.reply('✅ 마지막 곡을 건너뛰고 재생을 종료합니다.');
         }
     }
     else if (commandName === 'queue') {
