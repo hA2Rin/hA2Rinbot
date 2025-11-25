@@ -12,8 +12,7 @@
     "discord.js": "^14.16.0",
     "dotenv": "^16.4.0",
     "opusscript": "^0.0.8",
-    "play-dl": "^1.9.7",
-    "ytdl-core": "^4.11.5"
+    "play-dl": "^1.9.7"
   },
   "devDependencies": {
     "eslint": "^9.39.1"
